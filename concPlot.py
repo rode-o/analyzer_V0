@@ -1,116 +1,159 @@
+"""
+Data loading and collection utilities.
+
+Contains functions for reading CSV files, walking the directory structure
+to gather data, and extracting labels from file paths.
+"""
+
 import os
-import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
+import re
 import logging
+import pandas as pd
+import numpy as np
+from typing import Optional, List, Tuple, Union
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
-def list_subdirectories(base_path='trData'):
+
+def load_data(file_path: str) -> Optional[pd.DataFrame]:
     """
-    Lists all subdirectories within a specified base directory, sorted numerically based on the percentage value in the name.
-    
-    Args:
-        base_path (str): The path to the directory from which subdirectories are listed.
+    Load data from a CSV file given the file path.
 
-    Returns:
-        list: A list of sorted subdirectory names or an empty list if an error occurs.
+    :param file_path: The path to the CSV file.
+    :return: The loaded data as a pandas DataFrame, or None if an error occurs.
+    """
+    if not os.path.exists(file_path):
+        logger.error(f"File not found: {file_path}")
+        return None
+
+    try:
+        data = pd.read_csv(file_path, header=0)
+        logger.info(f"Data loaded from {file_path}, shape: {data.shape}")
+        return data
+    except Exception as e:
+        logger.error(f"Error loading data from {file_path}: {e}")
+        return None
+
+
+def extract_label_from_path(path: str, pattern: str = r'(\d+)%') -> Optional[int]:
+    """
+    Extract a numeric label (e.g., 10, 20, etc.) from a file path
+    by searching for a pattern like '10%', '30%', etc.
+
+    :param path: The file path from which to extract the label.
+    :param pattern: A regular expression pattern for extracting the label.
+    :return: The integer label if found, otherwise None.
     """
     try:
-        subdirectories = [d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))]
-        subdirectories.sort(key=lambda x: int(x.replace('%', '')))
-        logging.info(f"Sorted subdirectories: {subdirectories}")
-        return subdirectories
-    except FileNotFoundError:
-        logging.error(f"The directory {base_path} does not exist.")
-        return []
-    except PermissionError:
-        logging.error(f"Permission denied to access {base_path}.")
-        return []
-
-def find_csv_files(subdirectories, base_path='trData'):
-    """
-    Finds all CSV files within each subdirectory under the base path using os.walk for better efficiency.
-    
-    Args:
-        subdirectories (list): List of subdirectory names.
-        base_path (str): The base path where the subdirectories are located.
-
-    Returns:
-        list: A list of tuples containing the subdirectory and file path.
-    """
-    files_info = []
-    for subdir in subdirectories:
-        path = os.path.join(base_path, subdir)
-        for root, dirs, files in os.walk(path):
-            csv_files = [os.path.join(root, file) for file in files if file.endswith('.csv')]
-            files_info.extend([(subdir, file) for file in csv_files])
-    return files_info
-
-def plot_average_data(files_info):
-    """
-    Plots the row-wise average data from multiple CSV files in each subdirectory, using the first two columns, 
-    and scales the x-axis values from Hz to GHz by dividing by 1e9.
-    
-    Args:
-        files_info (dict): Dictionary with subdirectories as keys and list of file paths as values.
-    """
-    color_map = plt.get_cmap('tab20')
-    subdir_colors = {}
-    plotted_folders = 0
-
-    plt.figure(figsize=(10, 6))
-    ax = plt.gca()  # Get the current axis
-    ax.xaxis.set_major_formatter(ticker.StrMethodFormatter('{x:.0f}'))  # Set formatter to avoid scientific notation
-
-    for idx, (subdir, files) in enumerate(files_info.items()):
-        subdir_colors[subdir] = color_map(idx % 20)
-
-        # Read and collect data only if there are at least 2 columns in the CSV
-        data_frames = []
-        for file in files:
-            df = pd.read_csv(file)
-            if df.shape[1] >= 2:
-                data_frames.append(df)
-
-        if data_frames:
-            aligned_df = pd.concat(data_frames, axis=0)
-            average_df = aligned_df.groupby(aligned_df.index).mean()
-            plt.plot(average_df.iloc[:, 0] / 1e9, average_df.iloc[:, 1], 
-                     label=subdir, color=subdir_colors[subdir])
-            plotted_folders += 1
+        filename = os.path.basename(path)
+        match = re.search(pattern, filename)
+        if match:
+            return int(match.group(1))
         else:
-            logging.info(f"No valid data found in {subdir} to plot.")
+            logger.error(f"No valid numeric label found in {path}")
+            return None
+    except (ValueError, IndexError) as e:
+        logger.error(f"Error extracting label from path {path}: {e}")
+        return None
 
-    if plotted_folders > 0:
-        plt.xlabel("Frequency (GHz)")
-        plt.ylabel("Power (dB)")
-        plt.title(r'Averaged Loss Profile of $H_2O$ / $C_6H_{12}O_6$ Concentrations')
-        plt.legend(title=r'$C_6H_{12}O_6$ Concentration')
 
-        # Create top-level folder (e.g. "plots") to save the SVG
-        output_folder = "plots"
-        os.makedirs(output_folder, exist_ok=True)
-        output_path = os.path.join(output_folder, "averaged_loss_profile.svg")
-        
-        plt.savefig(output_path, format='svg')
-        plt.show()
+def collect_data(
+    directory_path: str,
+    file_extension: str = '.csv',
+    extract_labels: bool = True,
+    feature_index: int = 1,
+    pattern: str = r'(\d+)%'
+) -> Tuple[np.ndarray, Optional[np.ndarray], List[str]]:
+    """
+    Recursively collect data from all .csv files under a given directory.
+    Optionally extract labels from the file path and use a specific column as features.
+
+    :param directory_path: Path to the directory containing CSV files.
+    :param file_extension: Which file extension to look for (default '.csv').
+    :param extract_labels: Whether to attempt to extract numeric labels from file paths.
+    :param feature_index: Index of the feature column to be used from each CSV.
+    :param pattern: Regex pattern used to extract label percentages from paths.
+    :return: A tuple containing:
+             - X: Feature matrix (n_samples x 1) if feature_index is used,
+             - y: Optional array of labels if extract_labels is True and found,
+             - file_paths: List of file paths processed.
+    """
+    X, y, file_paths = [], [], []
+    if not os.path.exists(directory_path):
+        logger.error(f"Directory not found: {directory_path}")
+        return np.array([]), None, []
+
+    for root, _, files in os.walk(directory_path):
+        for file in files:
+            if file.endswith(file_extension):
+                file_path = os.path.join(root, file)
+                data = load_data(file_path)
+                label = extract_label_from_path(file_path, pattern) if extract_labels else None
+
+                if data is not None and not data.empty:
+                    try:
+                        # We use just one column as features; adapt as necessary.
+                        X.append(data.iloc[:, feature_index].values)
+                        file_paths.append(file_path)
+
+                        if extract_labels and label is not None:
+                            y.append(label)
+                    except IndexError as e:
+                        logger.error(f"Error processing file {file_path}: {e}")
+
+    if X:
+        # Stack all 1D arrays vertically and convert to float
+        X = np.vstack(X).astype(float)
+        if extract_labels and len(y) > 0:
+            y = np.array(y)
+        else:
+            y = None
     else:
-        logging.info("No data plotted.")
+        # If no data was found, return empty
+        X = np.array([])
 
-def main():
-    subdirectories = list_subdirectories()
-    files_info = find_csv_files(subdirectories)
+    return X, y, file_paths
 
-    # Group the CSV files by their subdirectory
-    files_dict = {}
-    for subdir, file in files_info:
-        if subdir not in files_dict:
-            files_dict[subdir] = []
-        files_dict[subdir].append(file)
 
-    plot_average_data(files_dict)
+def collect_dataframes_by_subdirectory(
+    directory_path: str,
+    file_extension: str = '.csv',
+    pattern: str = r'(\d+)%'
+) -> dict:
+    """
+    Collect all CSV files under `directory_path`, grouped by the
+    subdirectory name (e.g. "10%", "20%"), returning a dict:
+        {"10%": [df1, df2, ...], "20%": [df1, df2, ...], ...}
 
-if __name__ == '__main__':
-    main()
+    :param directory_path: Path to the directory containing CSV files.
+    :param file_extension: Which file extension to look for (default '.csv').
+    :param pattern: Regex pattern used to validate or parse subdir names (optional).
+    :return: A dict mapping subdir (e.g., "10%") -> list of DataFrames.
+    """
+    subdir_dict = {}
+    if not os.path.exists(directory_path):
+        logger.error(f"Directory not found: {directory_path}")
+        return subdir_dict
+
+    for root, _, files in os.walk(directory_path):
+        # The subdirectory name could be "10%", "20%", etc.
+        subdir_name = os.path.basename(root)
+        csv_files = [f for f in files if f.endswith(file_extension)]
+
+        # Skip if no CSV files in this folder
+        if not csv_files:
+            continue
+
+        # Optionally check if the subdir matches the expected pattern:
+        if not re.search(pattern, subdir_name):
+            # Not a recognized subdirectory label, or top-level folder
+            # You might skip or handle differently
+            continue
+
+        for file in csv_files:
+            file_path = os.path.join(root, file)
+            df = load_data(file_path)
+            if df is not None and not df.empty:
+                subdir_dict.setdefault(subdir_name, []).append(df)
+
+    return subdir_dict

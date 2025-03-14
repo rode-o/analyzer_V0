@@ -1,47 +1,38 @@
+# chem_model_test/entries/plot_flow_clean.py
+
 """
-Script for plotting data using PCA or t-SNE. Demonstrates usage of the core libraries
-to load data, perform transformations, and visualize the results.
+plot_flow_clean.py
+
+Demonstrates a modular NumPy-based approach for row-wise averaging
+and plotting frequency/power data from CSV files.
 """
 
-import os
 import logging
-from chem_model_test.core.utils import setup_logging
-from chem_model_test.core.data_loading import collect_data
-from chem_model_test.core.transformations import perform_pca, perform_tsne
-from chem_model_test.core.visualizations import plot_data
+import os
 
-def plot_flow(training_dir: str):
-    """
-    Load data from the training_dir, then prompt the user to choose
-    a dimensionality reduction technique and plot the results.
-    
-    :param training_dir: Path to directory containing training data.
-    """
-    X, y, _ = collect_data(training_dir)
-    if X.size == 0:
-        logging.warning("No data available for plotting.")
-        return
+from chem_model_test.conc_plot_core.subdir_loader import load_data_by_subdir
+from chem_model_test.conc_plot_core.averaging import average_subdir_arrays
+from chem_model_test.conc_plot_core.plotting import plot_averaged_data
 
-    method_choice = input("Choose transformation ('pca' or 'tsne', default 'pca'): ").strip().lower() or 'pca'
-    if method_choice == 'pca':
-        _, X_proj = perform_pca(X, n_components=2)
-        plot_data(X_proj, y, title="PCA Projection", legend_title="Label (%)")
-    elif method_choice == 'tsne':
-        X_proj = perform_tsne(X, n_components=2, perplexity=30)
-        plot_data(X_proj, y, title="t-SNE Projection", legend_title="Label (%)")
-    else:
-        logging.warning("Invalid choice. No plot generated.")
-
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def main():
-    """
-    Main function for the plot_flow script. Sets up logging and runs the plot routine.
-    """
-    setup_logging()
-    base_dir = os.getcwd()
-    training_dir = os.path.join(base_dir, 'trData')
-    plot_flow(training_dir)
+    # Build path to "trData" based on the location of this file, if desired:
+    script_dir = os.path.dirname(__file__)
+    tr_data_path = os.path.join(script_dir, "..", "trData")
+    tr_data_path = os.path.abspath(tr_data_path)
 
+    # 1) Load CSV arrays from each subdirectory
+    data_dict = load_data_by_subdir(tr_data_path)
+
+    # 2) Row-wise average arrays within each subdirectory
+    avg_dict = average_subdir_arrays(data_dict)
+
+    # 3) Plot the data
+    #   Save the figure in chem_model_test/plots, for example.
+    plot_path = os.path.join(script_dir, "..", "plots", "averaged_loss_profile.svg")
+    plot_path = os.path.abspath(plot_path)
+    plot_averaged_data(avg_dict, output_svg=plot_path)
 
 if __name__ == "__main__":
     main()
