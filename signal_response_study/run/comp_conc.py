@@ -10,9 +10,9 @@ and plotting frequency/power data from CSV files.
 import logging
 import os
 
-from chem_model_test.conc_plot_core.subdir_loader import load_data_by_subdir
-from chem_model_test.conc_plot_core.averaging import average_subdir_arrays
-from chem_model_test.conc_plot_core.plotting import plot_averaged_data
+from signal_response_study.comp_conc_core.subdir_loader import load_data_by_subdir
+from signal_response_study.comp_conc_core.averaging import average_subdir_arrays
+from signal_response_study.comp_conc_core.plotting import plot_averaged_data
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 

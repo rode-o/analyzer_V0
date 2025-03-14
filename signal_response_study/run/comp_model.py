@@ -8,15 +8,15 @@ import os
 import logging
 from sklearn.metrics import accuracy_score
 
-from chem_model_test.core.utils import setup_logging
-from chem_model_test.core.config import model_hyperparameters
-from chem_model_test.core.data_loading import collect_data, extract_label_from_path
-from chem_model_test.core.modeling import (
+from signal_response_study.comp_model_core.utils import setup_logging
+from signal_response_study.comp_model_core.config import model_hyperparameters
+from signal_response_study.comp_model_core.data_loading import collect_data, extract_label_from_path
+from signal_response_study.comp_model_core.modeling import (
     dynamic_import, train_until_100, grid_search_model,
     predict_folder, validate_predictions
 )
-from chem_model_test.core.transformations import perform_pca
-from chem_model_test.core.visualizations import plot_predictions
+from signal_response_study.comp_model_core.transformations import perform_pca
+from signal_response_study.comp_model_core.visualizations import plot_predictions
 
 
 def predict_flow(training_dir: str, unknown_dir: str):

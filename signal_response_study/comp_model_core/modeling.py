@@ -13,7 +13,7 @@ from sklearn.metrics import (
     precision_score, recall_score, f1_score
 )
 
-from chem_model_test.core.transformations import perform_pca
+from signal_response_study.comp_model_core.transformations import perform_pca
 
 logger = logging.getLogger(__name__)
 

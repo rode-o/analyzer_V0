@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from typing import Tuple, Union, List, Optional, Callable
 from datetime import datetime
 
-from chem_model_test.core.transformations import perform_pca, perform_tsne
+from signal_response_study.comp_model_core.transformations import perform_pca, perform_tsne
 
 logger = logging.getLogger(__name__)
 
